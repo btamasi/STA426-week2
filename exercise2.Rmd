@@ -1,0 +1,121 @@
+---
+title: 'STA426: Exercise 2'
+author: "Balint Tamasi"
+date: "9/25/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/Users/btamasi/UZH-biostat/2017FS/STA426 - High Throughput Genomic/material/week02-25sep2017/exercise")
+```
+
+# Data Import
+
+```{r}
+anno = read.table("SampleAnnotation.txt", as.is=TRUE, sep="\t", quote="",
+                  row.names=1, header=TRUE)
+x = read.table("expressiondata.txt", as.is=TRUE, sep="\t", quote="", row.names=1, header=TRUE, check.names = FALSE)
+x = as.matrix(x)
+```
+
+## Define samples and colors and phenotype
+```{r}
+samples = rownames(anno)
+colors = rainbow(nrow(anno))
+isNorm = anno$TissueType == "norm"
+isSick = anno$TissueType == "sick"
+isAcute = anno$TissueType == "acute"
+```
+
+# Distributions
+
+## Boxplot
+
+```{r}
+boxplot(log(x, 2), col = colors)
+```
+
+## Density
+
+A single density plot
+
+```{r}
+plot(density(log(x[, 1], 2)))
+```
+
+## Limma::plotDensities
+
+```{r}
+limma::plotDensities(log(x, 2), legend = "topright", col = colors)
+```
+
+# Normalization
+
+```{r}
+x_norm <- limma::normalizeQuantiles(x)
+limma::plotDensities(log(x_norm, 2), legend = "topright", col = colors)
+```
+
+# Clustering
+
+Using `1-corr(x)` as distance measure.
+
+First, let's do it column-wise:
+
+```{r}
+dis_col <- as.dist(1 - cor(x_norm))
+cl_col <- hclust(dis_col)
+plot(cl_col)
+```
+
+Secondly, do it row-wise for 1000 randomly selected rows.
+
+```{r}
+set.seed(13)
+x_norm_smpl <- x_norm[sample(nrow(x_norm), 1000), ] ## sample the normalized data
+dis_row <- as.dist(1 - cor(t(x_norm_smpl)))
+cl_row <- hclust(dis_row)
+plot(cl_row)
+```
+
+# Heatmap
+
+Using the `gplots::heatmap.2` function and the dendrograms computed in the previous steps.
+
+```{r}
+gplots::heatmap.2(x_norm_smpl, Rowv = as.dendrogram(cl_row), Colv = as.dendrogram(cl_col))
+```
+
+# Correlation matrix
+
+```{r}
+image(cor(x_norm), col = grey(seq(0, 1, length.out = 256)), axes = FALSE)
+axis(1, at = seq(0, 1, length.out = ncol(x_norm)), labels = samples)
+axis(2, at = seq(0, 1, length.out = ncol(x_norm)), labels = samples)
+```
+
+# Dimensionality reduction
+
+## Multidimensional scaling
+
+```{r}
+mds <- cmdscale(dis_col)
+plot(mds, col = ifelse(anno$TissueType == "norm", "green", 
+                       ifelse(anno$TissueType == "sick", "orange", "red")),
+     pch = 16)
+legend("bottomleft", c("norm", "sick", "acute"), pch = 16, 
+       col = c("green", "orange", "red"))
+title("Multidimensional scaling")
+```
+
+
+## PCA
+
+```{r}
+pc <- prcomp(x_norm)
+plot(pc)
+summary(pc)
+```
+
+The first principal component accounts for almost 95% of the variance in the normalized data.
